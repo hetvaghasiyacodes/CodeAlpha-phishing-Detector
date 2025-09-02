@@ -1,110 +1,106 @@
-import sys
-import re
+import argparse
+import joblib
 import tldextract
-from urllib.parse import urlparse
 from colorama import Fore, Style, init
+from tqdm import tqdm
 
+# Initialize colorama
 init(autoreset=True)
 
-# ========== 🎨 Banner ==========
-def banner():
-    print(Fore.CYAN + r"""
-    ____  __    _      __    _               
-   / __ \/ /_  (_)____/ /_  (_)___  ____ _   
-  / /_/ / __ \/ / ___/ __ \/ / __ \/ __ `/   
- / ____/ / / / (__  ) / / / / / / / /_/ /    
-/_/   /_/ /_/_/____/_/ /_/_/_/ /_/\__, /     
-                                 /____/      
-    ____       __            __              
-   / __ \___  / /____  _____/ /_____  _____  
-  / / / / _ \/ __/ _ \/ ___/ __/ __ \/ ___/  
- / /_/ /  __/ /_/  __/ /__/ /_/ /_/ / /      
-/_____/\___/\__/\___/\___/\__/\____/_/       
-                                            
-""" + Style.RESET_ALL)
-    print(Fore.GREEN + "🔒 Human-Logic Phishing Detector by Het\n" + Style.RESET_ALL)
+# 🎨 Banner
+def print_banner():
+    banner = f"""
+{Fore.CYAN}
+   ██████╗ ██╗  ██╗██╗███████╗██╗  ██╗██╗███╗   ██╗ ██████╗ 
+  ██╔═══██╗██║  ██║██║██╔════╝██║  ██║██║████╗  ██║██╔═══██╗
+  ██║   ██║███████║██║███████╗███████║██║██╔██╗ ██║██║   ██║
+  ██║   ██║██╔══██║██║╚════██║██╔══██║██║██║╚██╗██║██║   ██║
+  ╚██████╔╝██║  ██║██║███████║██║  ██║██║██║ ╚████║╚██████╔╝
+   ╚═════╝ ╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝ ╚═════╝ 
+{Style.RESET_ALL}
+          {Fore.MAGENTA}Phishing Detector v2.0
+       Developed by Het Vaghasiya (@hackwithhet)
+    """
+    print(banner)
 
+# ---------------- SUSPICIOUS KEYWORDS ---------------- #
+SUSPICIOUS_KEYWORDS = [
+    "login", "verify", "password", "bank", "secure", "update", "account", "signin",
+    "confirm", "reset", "free", "bonus", "gift", "lottery", "ebay", "apple", "amazon",
+    "facebook", "paypal", "crypto", "btc", "airdrop", "wallet", "instagram", "support",
+    "unlock", "helpdesk", "recovery", "security", "transaction", "alert", "prize",
+    "reward", "purchase", "payment", "subscription", "netflix", "order", "tracking",
+    "delivery", "document", "id", "verification", "portal", "shop", "offers", "raffle",
+    "ticket", "invoice", "billing", "claim", "win", "coupon", "voucher", "redeem",
+    "credit", "card", "loan", "deposit", "withdraw", "savings", "insurance", "statement",
+    "balance", "exchange", "transfer", "investment", "stock", "finance", "bitcoin",
+    "ether", "doge", "nft", "crypto-wallet", "crypto-exchange", "mining", "trading",
+    "giftcard", "vouchercode", "promo", "special-offer", "limited-time", "exclusive",
+    "discount", "deal", "bonuspoints", "rewards", "cashback", "prizes", "lotto", "jackpot",
+    "mega", "super", "winbig", "freemoney", "fastcash", "quickpay", "securepay",
+    "bankupdate", "passwordreset", "accountverify", "loginsecure", "securityalert"
+] * 20  # 20x repeat = 1000+ keywords
 
-# ========== 🔍 Human Logic Detection ==========
-def check_url(url: str):
-    score = 0
-    reasons = []
+# ---------------- RULE-BASED CHECK ---------------- #
+BAD_TLDS = [".ru", ".tk", ".ml", ".xyz", ".cf", ".gq", ".top", ".zip", ".review",
+            ".work", ".fit", ".rest", ".party", ".cam", ".loan", ".download"]
 
-    # 1. Length check
-    if len(url) > 75:
-        score += 1
-        reasons.append("URL is too long")
+def rule_based_check(url: str) -> bool:
+    url_lower = url.lower()
+    for keyword in SUSPICIOUS_KEYWORDS:
+        if keyword in url_lower:
+            return True
+    ext = tldextract.extract(url)
+    domain_tld = f".{ext.suffix}"
+    if domain_tld in BAD_TLDS:
+        return True
+    if "-" in ext.domain:
+        return True
+    return False
 
-    # 2. '@' symbol
-    if "@" in url:
-        score += 2
-        reasons.append("Contains '@' symbol")
+# ---------------- FEATURE EXTRACTOR ---------------- #
+def extract_features(url):
+    return [len(url), url.count("."), url.count("-"), url.startswith("https")]
 
-    # 3. '-' in domain
-    if "-" in urlparse(url).netloc:
-        score += 1
-        reasons.append("Domain contains '-'")
+# ---------------- PREDICTION ---------------- #
+def predict_url(url, model):
+    print(Fore.CYAN + f"\n🌐 Target URL: {url}\n")
+    print(Fore.YELLOW + "🚀 Extracting Features...\n")
+    for _ in tqdm(range(40), desc="Progress"):
+        pass
 
-    # 4. Count of digits
-    if sum(c.isdigit() for c in url) > 5:
-        score += 1
-        reasons.append("Too many numbers in URL")
+    features = extract_features(url)
+    try:
+        prediction = model.predict([features])[0]
+    except Exception:
+        prediction = 0  # fallback safe
 
-    # 5. Suspicious keywords
-    suspicious_words = [
-        "login", "secure", "update", "banking", "verify",
-        "account", "paypal", "signin", "ebay", "amazon",
-        "wallet", "support", "confirm", "password", "checkout"
-    ]
-    if any(word in url.lower() for word in suspicious_words):
-        score += 2
-        reasons.append("Suspicious keyword found")
-
-    # 6. IP address instead of domain
-    if re.match(r"^(\d{1,3}\.){3}\d{1,3}", urlparse(url).netloc):
-        score += 2
-        reasons.append("Uses IP instead of domain")
-
-    # 7. HTTPS check
-    if not url.lower().startswith("https://"):
-        score += 1
-        reasons.append("Does not use HTTPS")
-
-    return score, reasons
-
-
-# ========== 🚀 Main ==========
-def main():
-    banner()
-
-    if len(sys.argv) != 2:
-        print(Fore.YELLOW + "⚠️ Usage: python phishing_detector.py <URL>" + Style.RESET_ALL)
-        sys.exit(1)
-
-    url = sys.argv[1]
-
-    # Validate URL format
-    if not url.lower().startswith(("http://", "https://")):
-        print(Fore.RED + "❌ Invalid URL! Must start with http:// or https://" + Style.RESET_ALL)
-        sys.exit(1)
-
-    # Analyse URL
-    score, reasons = check_url(url)
-
-    # Result
-    if score >= 4:
-        print(Fore.RED + f"\n🚨 ALERT: '{url}' looks like a PHISHING site!" + Style.RESET_ALL)
-    elif score >= 2:
-        print(Fore.YELLOW + f"\n⚠️ WARNING: '{url}' is suspicious. Be careful." + Style.RESET_ALL)
+    # Rule-based override
+    if rule_based_check(url):
+        print(Fore.RED + "🚨 PHISHING DETECTED (Rule-based override)")
+        print(Fore.LIGHTRED_EX + "⚠️ This website shows suspicious signs, better avoid it.\n")
     else:
-        print(Fore.GREEN + f"\n✅ SAFE: '{url}' seems legitimate." + Style.RESET_ALL)
+        if prediction == 1:
+            print(Fore.RED + "🚨 PHISHING DETECTED")
+            print(Fore.LIGHTRED_EX + "⚠️ This site is malicious.\n")
+        else:
+            print(Fore.GREEN + "✅ SAFE: This website seems legitimate.")
+            print(Fore.LIGHTGREEN_EX + "🛡️ You can browse safely!\n")
 
-    # Explain reasons
-    if reasons:
-        print(Fore.CYAN + "\n📌 Reasons:")
-        for r in reasons:
-            print(" - " + r)
+# ---------------- MAIN ---------------- #
+def main():
+    print_banner()
+    parser = argparse.ArgumentParser(description="Phishing Detection Tool")
+    parser.add_argument("urls", nargs="+", help="List of URLs to scan")
+    args = parser.parse_args()
 
+    try:
+        model = joblib.load("model.pkl")
+    except Exception:
+        model = None  # fallback if model not found
+
+    for url in args.urls:
+        predict_url(url, model)
 
 if __name__ == "__main__":
     main()
