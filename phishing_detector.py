@@ -1,67 +1,52 @@
 import joblib
-import re
 import argparse
 import pyfiglet
-import os
-import time
-import sys
 from termcolor import colored
-from colorama import Fore, Style, init
 from tqdm import tqdm
+import time
+import random
 
-# Colorama init
-init(autoreset=True)
-
-# Load trained ML model
+# Load trained model
 model = joblib.load("model.pkl")
 
-# -------- Banner Section --------
-def rainbow_text(text):
-    colors = [Fore.RED, Fore.YELLOW, Fore.GREEN, Fore.CYAN, Fore.MAGENTA]
-    result = ""
-    for i, char in enumerate(text):
-        result += colors[i % len(colors)] + char
-    return result
+# Fancy Banner
+banner = pyfiglet.figlet_format("Phishing Detector")
+print(colored(banner, "cyan", attrs=["bold"]))
+print(colored("🔒 Developed by Het Vaghasiya (@hackwithhet)\n", "yellow", attrs=["bold"]))
 
-def show_banner():
-    os.system("cls" if os.name == "nt" else "clear")
-    banner = pyfiglet.figlet_format("Phishing Detector", font="slant")
-    print(rainbow_text(banner))
-    print(Fore.YELLOW + "🔒 Developed by Het Vaghasiya (@hackwithhet)\n")
-
-# -------- Feature Extraction --------
 def extract_features(url):
-    return [
-        len(url), 
-        url.count('.'),
-        1 if "https" in url else 0,
-        1 if "@" in url else 0,
-        1 if re.search(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", url) else 0
-    ]
+    features = {}
+    features["has_https"] = 1 if url.startswith("https") else 0
+    features["url_length"] = len(url)
+    features["has_at_symbol"] = 1 if "@" in url else 0
+    return [features["has_https"], features["url_length"], features["has_at_symbol"]]
 
-# -------- Progress Bar Animation --------
-def show_progress(task="Analyzing URL"):
-    for _ in tqdm(range(30), desc=task, ncols=100, colour="green"):
+def fancy_loader(task="Analyzing URL"):
+    print(colored(f"\n🚀 {task}...\n", "magenta", attrs=["bold"]))
+    for _ in tqdm(range(40), desc="Progress", ncols=80, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}"):
         time.sleep(0.05)
 
-# -------- Detection --------
 def predict_url(url):
-    show_progress("🔍 Scanning")
+    print(colored(f"\n🌐 Target URL: {url}", "blue", attrs=["bold"]))
+    fancy_loader("Extracting Features")
+
     features = extract_features(url)
     prediction = model.predict([features])[0]
-    
+
+    # Random delay for realistic effect
+    time.sleep(random.uniform(0.5, 1.5))
+
     if prediction == 1:
-        print(Fore.RED + Style.BRIGHT + f"\n🚨 PHISHING DETECTED: {url}\n")
+        print(colored("\n⚠️ ALERT: This website looks like a PHISHING site!", "red", attrs=["bold", "blink"]))
+        print(colored("💀 Action Recommended: Do NOT enter your credentials here.\n", "red"))
     else:
-        print(Fore.GREEN + Style.BRIGHT + f"\n✅ SAFE WEBSITE: {url}\n")
+        print(colored("\n✅ SAFE: This website seems legitimate.", "green", attrs=["bold"]))
+        print(colored("🛡️ You can browse safely!\n", "green"))
 
-# -------- Main --------
 def main():
-    parser = argparse.ArgumentParser(description="Phishing Detector Tool")
-    parser.add_argument("urls", nargs="+", help="Enter one or more URLs to check")
+    parser = argparse.ArgumentParser(description="Phishing Detection Tool")
+    parser.add_argument("urls", nargs="+", help="List of URLs to scan")
     args = parser.parse_args()
-
-    show_banner()
 
     for url in args.urls:
         predict_url(url)
